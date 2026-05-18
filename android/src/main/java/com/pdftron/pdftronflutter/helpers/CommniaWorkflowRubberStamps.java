@@ -136,6 +136,7 @@ public final class CommniaWorkflowRubberStamps {
                     bitmap.recycle();
                 }
             }
+            CommniaRubberStampUi.saveDefaultApprovedStampPreset(context);
             result.success(null);
         } catch (Exception e) {
             Log.e(TAG, "sync failed", e);
