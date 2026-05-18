@@ -279,6 +279,7 @@ static NSString * const PTExitSearchModeKey = @"exitSearchMode";
 static NSString * const PTSetLayoutModeKey = @"setLayoutMode";
 static NSString * const PTSetFitModeKey = @"setFitMode";
 static NSString * const PTGetAnnotationsOnPageKey = @"getAnnotationsOnPage";
+static NSString * const PTSyncCommniaWorkflowRubberStampsKey = @"syncCommniaWorkflowRubberStamps";
 
 // argument
 static NSString * const PTDocument1ArgumentKey = @"document1";
@@ -320,6 +321,8 @@ static NSString * const PTAnimatedArgumentKey = @"animated";
 // Hygen Generated Method Parameters
 static NSString * const PTLayoutModeArgumentKey = @"layoutMode";
 static NSString * const PTFitModeArgumentKey = @"fitMode";
+static NSString * const PTDisplayNameArgumentKey = @"displayName";
+static NSString * const PTFormattedTimestampArgumentKey = @"formattedTimestamp";
 
 // event strings
 static NSString * const PTExportAnnotationCommandEventKey = @"export_annotation_command_event";

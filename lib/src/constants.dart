@@ -6,6 +6,7 @@ class Functions {
   static const initialize = "initialize";
   static const openDocument = "openDocument";
   static const openDocumentDifference = "openDocumentDifference";
+  static const syncCommniaWorkflowRubberStamps = "syncCommniaWorkflowRubberStamps";
   static const getSavedSignatures = "getSavedSignatures";
   static const getSavedSignatureFolder = "getSavedSignatureFolder";
 
@@ -94,6 +95,8 @@ class Parameters {
   static const document = "document";
   static const password = "password";
   static const config = "config";
+  static const displayName = "displayName";
+  static const formattedTimestamp = "formattedTimestamp";
   static const xfdfCommand = "xfdfCommand";
   static const xfdf = "xfdf";
   static const bookmarkJson = "bookmarkJson";

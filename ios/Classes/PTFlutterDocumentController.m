@@ -1,5 +1,6 @@
 #import "PdftronFlutterPlugin.h"
 #import "PTFlutterDocumentController.h"
+#import "CommniaRubberStampUi.h"
 #import "DocumentViewFactory.h"
 
 #include <objc/runtime.h>
@@ -277,9 +278,11 @@ static BOOL PT_addMethod(Class cls, SEL selector, void (^block)(id))
 - (void)toolManagerToolChanged:(PTToolManager *)toolManager
 {
     PTTool *tool = toolManager.tool;
-    
+
+    [CommniaRubberStampUi applyHideStandardStampsForTool:tool toolManager:toolManager];
+
     const BOOL backToPan = tool.backToPanToolAfterUse;
-    
+
     [super toolManagerToolChanged:toolManager];
     
     if (tool.backToPanToolAfterUse != backToPan) {

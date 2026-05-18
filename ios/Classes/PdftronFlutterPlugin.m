@@ -2,6 +2,7 @@
 #import "PTFlutterDocumentController.h"
 #import "DocumentViewFactory.h"
 #import "PTNavigationController.h"
+#import "CommniaRubberStampUi.h"
 
 @interface PdftronFlutterPlugin () <PTTabbedDocumentViewControllerDelegate, PTDocumentControllerDelegate>
 
@@ -29,6 +30,158 @@
 @property (nonatomic, assign, getter=isMultiTabSet) BOOL multiTabSet;
 
 @end
+
+static UIColor *commniaUIColorFromRGB(unsigned rgb) {
+    return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0
+                           green:((rgb >> 8) & 0xFF) / 255.0
+                            blue:(rgb & 0xFF) / 255.0
+                           alpha:1.0];
+}
+
+/// Decodes custom rubber-stamp options previously stored under `PTCustomStampOptionsUserDefaultsKey`.
+static NSArray<PTCustomStampOption *> *commniaDecodeCustomStampOptionsFromDefaultsValue(id raw) {
+    if (!raw) {
+        return @[];
+    }
+    if ([raw isKindOfClass:[NSData class]]) {
+        @try {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            id obj = [NSKeyedUnarchiver unarchiveObjectWithData:(NSData *)raw];
+#pragma clang diagnostic pop
+            if ([obj isKindOfClass:[NSArray class]]) {
+                NSMutableArray<PTCustomStampOption *> *out = [NSMutableArray array];
+                for (id el in (NSArray *)obj) {
+                    if ([el isKindOfClass:[PTCustomStampOption class]]) {
+                        [out addObject:(PTCustomStampOption *)el];
+                    }
+                }
+                return [out copy];
+            }
+        } @catch (__unused NSException *ex) {
+            return @[];
+        }
+    }
+    if ([raw isKindOfClass:[NSArray class]]) {
+        NSMutableArray<PTCustomStampOption *> *out = [NSMutableArray array];
+        for (id el in (NSArray *)raw) {
+            if ([el isKindOfClass:[PTCustomStampOption class]]) {
+                [out addObject:(PTCustomStampOption *)el];
+            }
+        }
+        return [out copy];
+    }
+    return @[];
+}
+
+/// Loads persisted custom stamps (same backing store the rubber-stamp picker uses). Falls back to the SDK manager when nothing is stored yet.
+NSArray<PTCustomStampOption *> *CommniaLoadPersistedCustomStampOptions(void) {
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    id raw = [ud objectForKey:PTCustomStampOptionsUserDefaultsKey];
+    NSArray<PTCustomStampOption *> *fromDefaults = commniaDecodeCustomStampOptionsFromDefaultsValue(raw);
+    if (fromDefaults.count > 0) {
+        return fromDefaults;
+    }
+    PTRubberStampManager *seed = [[PTRubberStampManager alloc] init];
+    return seed.customStampOptions ?: @[];
+}
+
+/// Archives the merged custom-stamp list so Apryse tools (e.g. rubber-stamp modal on 11.4+) read the same options.
+static BOOL commniaArchiveCustomStampOptionsToUserDefaults(NSArray<PTCustomStampOption *> *options, NSError **outError) {
+    NSData *data = nil;
+    if (@available(iOS 11.0, *)) {
+        data = [NSKeyedArchiver archivedDataWithRootObject:options requiringSecureCoding:NO error:outError];
+    }
+    if (!data) {
+        @try {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            data = [NSKeyedArchiver archivedDataWithRootObject:options];
+#pragma clang diagnostic pop
+        } @catch (NSException *ex) {
+            if (outError) {
+                *outError = [NSError errorWithDomain:@"pdftron_flutter"
+                                                code:1
+                                            userInfo:@{NSLocalizedDescriptionKey: ex.reason ?: @"NSKeyedArchiver failed"}];
+            }
+            return NO;
+        }
+    }
+    if (!data) {
+        if (outError && !*outError) {
+            *outError = [NSError errorWithDomain:@"pdftron_flutter"
+                                            code:2
+                                        userInfo:@{NSLocalizedDescriptionKey: @"NSKeyedArchiver returned nil"}];
+        }
+        return NO;
+    }
+    if (outError) {
+        *outError = nil;
+    }
+    [NSUserDefaults.standardUserDefaults setObject:data forKey:PTCustomStampOptionsUserDefaultsKey];
+    return YES;
+}
+
+static NSDate *commniaParseWorkflowStampDateFromString(NSString *s) {
+    if (s.length == 0) {
+        return nil;
+    }
+    if (@available(iOS 11.0, *)) {
+        NSISO8601DateFormatter *iso = [[NSISO8601DateFormatter alloc] init];
+        iso.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+        NSDate *d = [iso dateFromString:s];
+        if (d) {
+            return d;
+        }
+        iso.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+        d = [iso dateFromString:s];
+        if (d) {
+            return d;
+        }
+    }
+    NSDateFormatter *df = [[NSDateFormatter alloc] init];
+    df.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    NSArray<NSString *> *fmts = @[
+        @"yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        @"yyyy-MM-dd'T'HH:mm:ssXXX",
+        @"yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        @"yyyy-MM-dd'T'HH:mm:ssZ",
+        @"yyyy-MM-dd HH:mm:ss"
+    ];
+    for (NSString *fmt in fmts) {
+        df.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+        df.dateFormat = fmt;
+        NSDate *d = [df dateFromString:s];
+        if (d) {
+            return d;
+        }
+        df.timeZone = [NSTimeZone localTimeZone];
+        d = [df dateFromString:s];
+        if (d) {
+            return d;
+        }
+    }
+    return nil;
+}
+
+/// Second line: `By {name} at {time}, {dd MMM yyyy}` (device locale for time and month abbreviation).
+static NSString *commniaWorkflowRubberStampSecondLine(NSString *trimmedName, NSString *formattedTs) {
+    NSDate *when = [NSDate date];
+    NSString *trimmed = [(formattedTs ?: @"") stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmed.length > 0) {
+        NSDate *parsed = commniaParseWorkflowStampDateFromString(trimmed);
+        if (parsed) {
+            when = parsed;
+        }
+    }
+    NSDateFormatter *timeDf = [[NSDateFormatter alloc] init];
+    timeDf.locale = [NSLocale currentLocale];
+    timeDf.dateFormat = @"h:mm a";
+    NSDateFormatter *dateDf = [[NSDateFormatter alloc] init];
+    dateDf.locale = [NSLocale currentLocale];
+    dateDf.dateFormat = @"dd MMM yyyy";
+    return [NSString stringWithFormat:@"By %@ at %@, %@", trimmedName, [timeDf stringFromDate:when], [dateDf stringFromDate:when]];
+}
 
 @implementation PdftronFlutterPlugin
 
@@ -1575,6 +1728,8 @@
         [self saveDocument:result];
     } else if ([call.method isEqualToString:PTCommitToolKey]) {
         [self commitTool:result];
+    } else if ([call.method isEqualToString:PTSyncCommniaWorkflowRubberStampsKey]) {
+        [self syncCommniaWorkflowRubberStampsWithArguments:call.arguments result:result];
     } else if ([call.method isEqualToString:PTGetPageCountKey]) {
         [self getPageCount:result];
     } else if ([call.method isEqualToString:PTUndoKey]) {
@@ -3907,6 +4062,86 @@
     }
 
     return Nil;
+}
+
+- (void)syncCommniaWorkflowRubberStampsWithArguments:(NSDictionary *)arguments result:(FlutterResult)result {
+    NSDictionary *args = [arguments isKindOfClass:[NSDictionary class]] ? arguments : @{};
+    void (^work)(void) = ^{
+        PTDocumentController *dc = [PdftronFlutterPlugin PT_getSelectedDocumentController:self.tabbedDocumentViewController];
+        if (!dc || ![dc isKindOfClass:[PTFlutterDocumentController class]]) {
+            result([FlutterError errorWithCode:@"invalid_state" message:@"No active document controller" details:nil]);
+            return;
+        }
+        PTFlutterDocumentController *flutterDoc = (PTFlutterDocumentController *)dc;
+        if (!flutterDoc.toolManager || !flutterDoc.document) {
+            result([FlutterError errorWithCode:@"invalid_state" message:@"Document or tool manager not ready" details:nil]);
+            return;
+        }
+        if (flutterDoc.isReadOnly) {
+            result(nil);
+            return;
+        }
+        NSString *displayName = [PdftronFlutterPlugin PT_idAsNSString:args[PTDisplayNameArgumentKey]];
+        if (displayName.length == 0 || [displayName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length == 0) {
+            result([FlutterError errorWithCode:@"invalid_argument" message:@"displayName must be a non-empty string" details:nil]);
+            return;
+        }
+        NSString *trimmedName = [displayName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSString *formattedTs = [PdftronFlutterPlugin PT_idAsNSString:args[PTFormattedTimestampArgumentKey]];
+        NSString *secondText = commniaWorkflowRubberStampSecondLine(trimmedName, formattedTs);
+
+        NSArray<NSString *> *titles = @[
+            @"Approved with Comments",
+            @"Approved",
+            @"Rejected",
+            @"Superseded"
+        ];
+        NSArray<NSNumber *> *colors = @[
+            @(0x2196F3u),
+            @(0x4CAF50u),
+            @(0xF44336u),
+            @(0xFF9800u)
+        ];
+        NSSet<NSString *> *titleSet = [NSSet setWithArray:titles];
+        NSMutableArray<PTCustomStampOption *> *merged = [NSMutableArray array];
+        for (PTCustomStampOption *opt in CommniaLoadPersistedCustomStampOptions()) {
+            NSString *primary = opt.text ?: @"";
+            if (![titleSet containsObject:primary]) {
+                [merged addObject:opt];
+            }
+        }
+        UIColor *white = [UIColor whiteColor];
+        UIColor *border = [UIColor clearColor];
+        for (NSUInteger i = 0; i < titles.count; i++) {
+            unsigned rgb = (unsigned)[colors[i] unsignedIntValue];
+            UIColor *bg = commniaUIColorFromRGB(rgb);
+            PTCustomStampOption *stamp = [[PTCustomStampOption alloc] initWithText:titles[i]
+                                                                          secondText:secondText
+                                                                        bgColorStart:bg
+                                                                          bgColorEnd:bg
+                                                                           textColor:white
+                                                                         borderColor:border
+                                                                         fillOpacity:1.0
+                                                                        pointingLeft:NO
+                                                                       pointingRight:NO];
+            [merged addObject:stamp];
+        }
+        NSError *persistErr = nil;
+        if (!commniaArchiveCustomStampOptionsToUserDefaults([merged copy], &persistErr)) {
+            NSString *msg = persistErr.localizedDescription ?: @"Failed to persist custom rubber stamps";
+            result([FlutterError errorWithCode:@"stamp_sync" message:msg details:nil]);
+            return;
+        }
+        NSArray<PTCustomStampOption *> *mergedCopy = [merged copy];
+        [CommniaRubberStampUi applyStampOptions:mergedCopy toToolManager:flutterDoc.toolManager];
+        result(nil);
+    };
+
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), work);
+    }
 }
 
 @end

@@ -6,7 +6,7 @@ repository: https://github.com/PDFTron/pdftron-flutter
 issue_tracker: https://github.com/PDFTron/pdftron-flutter/issues
 documentation: https://pub.dev/documentation/pdftron_flutter/latest/pdftron/pdftron-library.html
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ">=2.12.0 <4.0.0"
   flutter: ">=1.12.0"
 dependencies:
   flutter:

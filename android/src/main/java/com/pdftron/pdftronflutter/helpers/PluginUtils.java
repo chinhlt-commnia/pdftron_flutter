@@ -10,6 +10,7 @@ import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -105,6 +106,8 @@ public class PluginUtils {
     public static final String KEY_ANNOTATIONS_WITH_FLAGS = "annotationsWithFlags";
     public static final String KEY_ANNOTATION_PROPERTIES = "annotationProperties";
     public static final String KEY_LEADING_NAV_BUTTON_ICON = "leadingNavButtonIcon";
+    public static final String KEY_DISPLAY_NAME = "displayName";
+    public static final String KEY_FORMATTED_TIMESTAMP = "formattedTimestamp";
     public static final String KEY_DPI = "dpi";
     public static final String KEY_EXPORT_FORMAT = "exportFormat";
     public static final String KEY_EXPORT_FORMAT_BMP = "BMP";
@@ -290,6 +293,7 @@ public class PluginUtils {
     public static final String FUNCTION_INITIALIZE = "initialize";
     public static final String FUNCTION_OPEN_DOCUMENT = "openDocument";
     public static final String FUNCTION_OPEN_DOCUMENT_DIFFERENCE = "openDocumentDifference";
+    public static final String FUNCTION_SYNC_COMMNIA_WORKFLOW_RUBBER_STAMPS = "syncCommniaWorkflowRubberStamps";
     public static final String FUNCTION_IMPORT_ANNOTATION_COMMAND = "importAnnotationCommand";
     public static final String FUNCTION_IMPORT_BOOKMARK_JSON = "importBookmarkJson";
     public static final String FUNCTION_SAVE_DOCUMENT = "saveDocument";
@@ -2719,6 +2723,22 @@ public class PluginUtils {
                 getAnnotationsOnPage(call, result, component);
                 break;
             }
+            case FUNCTION_SYNC_COMMNIA_WORKFLOW_RUBBER_STAMPS: {
+                checkFunctionPrecondition(component);
+                String displayName = call.argument(KEY_DISPLAY_NAME);
+                if (displayName == null) {
+                    result.error("invalid_argument", "displayName must be a non-empty string", null);
+                    break;
+                }
+                String formattedTimestamp = call.argument(KEY_FORMATTED_TIMESTAMP);
+                Context ctx = getContextForViewerComponent(component);
+                if (ctx == null) {
+                    result.error("invalid_state", "No Android context for viewer", null);
+                } else {
+                    CommniaWorkflowRubberStamps.sync(ctx, displayName, formattedTimestamp, result);
+                }
+                break;
+            }
             default:
                 Log.e("PDFTronFlutter", "notImplemented: " + call.method);
                 result.notImplemented();
@@ -4266,6 +4286,7 @@ public class PluginUtils {
         if (component.getToolManager() != null) {
             component.getToolManager().setStylusAsPen(component.isUseStylusAsPen());
             component.getToolManager().setSignSignatureFieldsWithStamps(component.isSignSignatureFieldWithStamps());
+            CommniaRubberStampUi.installHideStandardStamps(component.getToolManager());
         }
 
         addListeners(component);
@@ -4536,6 +4557,17 @@ public class PluginUtils {
     private static void checkFunctionPrecondition(ViewerComponent component) {
         Objects.requireNonNull(component);
         Objects.requireNonNull(component.getPdfDoc());
+    }
+
+    @Nullable
+    private static Context getContextForViewerComponent(ViewerComponent component) {
+        if (component instanceof Context) {
+            return (Context) component;
+        }
+        if (component instanceof View) {
+            return ((View) component).getContext();
+        }
+        return null;
     }
 
     @Nullable

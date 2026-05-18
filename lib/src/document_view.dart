@@ -101,6 +101,29 @@ class DocumentViewController {
     });
   }
 
+  /// Registers four Commnia workflow rubber stamps (Approved with Comments,
+  /// Approved, Rejected, Superseded) in the native rubber-stamp picker.
+  ///
+  /// Call after [openDocument] completes (or from a document-loaded listener)
+  /// on annotate flows. [displayName] must be non-empty. The subtitle is
+  /// `By {displayName} at {time}, {dd MMM yyyy}` using the device locale for
+  /// time and month (e.g. `By Jane Doe at 12:23 pm, 28 Apr 2026`).
+  ///
+  /// If [formattedTimestamp] is null or empty, the plugin uses the current
+  /// device time. If set, pass an ISO-8601-style instant (e.g.
+  /// `2026-04-28T12:23:00+10:00`) so native code can format the subtitle
+  /// consistently; unparsable values are ignored and the device time is used.
+  ///
+  /// Repeated calls replace the same four entries without duplicating rows.
+  Future<void> syncCommniaWorkflowRubberStamps(
+      {required String displayName, String? formattedTimestamp}) {
+    return _channel.invokeMethod(Functions.syncCommniaWorkflowRubberStamps,
+        <String, dynamic>{
+      Parameters.displayName: displayName,
+      Parameters.formattedTimestamp: formattedTimestamp,
+    });
+  }
+
   /// Imports the given XFDF annotation string to the current document.
   Future<void> importAnnotations(String xfdf) {
     return _channel.invokeMethod(

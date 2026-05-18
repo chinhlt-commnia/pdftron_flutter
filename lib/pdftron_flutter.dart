@@ -73,6 +73,19 @@ class PdftronFlutter {
     });
   }
 
+  /// Same as [DocumentViewController.syncCommniaWorkflowRubberStamps] for the
+  /// full-screen viewer opened via [PdftronFlutter.openDocument]. Subtitle:
+  /// `By {name} at {time}, {dd MMM yyyy}`; see that method for
+  /// [formattedTimestamp] (ISO-8601 recommended).
+  static Future<void> syncCommniaWorkflowRubberStamps(
+      {required String displayName, String? formattedTimestamp}) {
+    return _channel.invokeMethod(Functions.syncCommniaWorkflowRubberStamps,
+        <String, dynamic>{
+      Parameters.displayName: displayName,
+      Parameters.formattedTimestamp: formattedTimestamp,
+    });
+  }
+
   /// Imports the given XFDF annotation string to the current document.
   static Future<void> importAnnotations(String xfdf) {
     return _channel.invokeMethod(
