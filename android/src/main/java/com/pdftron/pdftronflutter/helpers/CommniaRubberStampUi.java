@@ -166,7 +166,7 @@ public final class CommniaRubberStampUi {
 
         LifecycleOwner lifecycleOwner = (LifecycleOwner) activity;
         Observer<PresetBarState> observer = state -> {
-            if (state == null || !state.isVisible() || !state.isSinglePreset()) {
+            if (state == null || !state.isVisible || !state.isSinglePreset) {
                 return;
             }
             if (state.getToolbarButtonTypeId() != ToolbarButtonType.STAMP.getValue()) {
